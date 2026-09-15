@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { prisma, json, type Transaction } from '../db/client';
+import { prisma, json, type Transaction, Prisma } from '../db/client';
 import { freshMember, publicUserFields, hashPassword, type Member } from '../auth/sessions';
 import { type Asset, roles, conditions, requestTypes, expandRange, splitAmounts, classify } from '../contracts/domain';
 import { ApiError, clean, allow, now, id, asset, audit, dimensions, financialData, insertAsset, validated, getSource } from './asset-service';
@@ -17,6 +17,7 @@ export async function mutate(member: Member, input: Input) {
     if (existing.actor !== member.id || (existing.requestHash && existing.requestHash !== requestHash)) throw new ApiError('รหัสคำขอนี้ใช้กับข้อมูลอื่นแล้ว กรุณาเปิดฟอร์มใหม่', 409);
     return { ...JSON.parse(existing.response), ok: true, replayed: true };
   };
+  const isolationLevel: Prisma.TransactionIsolationLevel = ['split', 'approve', 'reject'].includes(action) ? 'Serializable' : 'ReadCommitted';
   try {
     return await prisma.$transaction(async tx => {
       const m = await freshMember(tx, member);
@@ -25,7 +26,7 @@ export async function mutate(member: Member, input: Input) {
       const result = await perform(tx, m, action, input, passwordHash);
       await tx.operation.create({ data: { id: token, valid: 1, actor: m.id, createdAt: now(), requestHash, response: json(result) } });
       return result;
-    }, { isolationLevel: 'Serializable', maxWait: 10000, timeout: 20000 });
+    }, { isolationLevel, maxWait: 15000, timeout: 45000 });
   } catch (error) {
     // A concurrent identical request may have committed while this transaction rolled back.
     if (['P2002', 'P2034'].includes((error as { code?: string }).code || '')) {
@@ -135,6 +136,8 @@ async function perform(tx: Transaction, m: Member, action: string, b: Input, pas
 
     let importedCount = 0;
     const reason = clean(b.reason ?? 'นำเข้าแบบกลุ่ม (Batch Import)');
+    const assetsToInsert: Prisma.AssetCreateManyInput[] = [];
+    const sourceRowsToInsert: Prisma.SourceRowCreateManyInput[] = [];
 
     for (const key of keys) {
       const row = rowMap.get(key);
@@ -180,18 +183,16 @@ async function perform(tx: Transaction, m: Member, action: string, b: Input, pas
         createdAt: now()
       };
 
-      await insertAsset(tx, base);
-      await tx.sourceRow.create({
-        data: {
-          id: id(),
-          sourceId,
-          sourceRow: key,
-          raw: json(row),
-          decision: 'imported',
-          reason,
-          actor: m.id,
-          createdAt: now()
-        }
+      assetsToInsert.push(financialData(base) as Prisma.AssetCreateManyInput);
+      sourceRowsToInsert.push({
+        id: id(),
+        sourceId,
+        sourceRow: key,
+        raw: json(row),
+        decision: 'imported',
+        reason,
+        actor: m.id,
+        createdAt: now()
       });
 
       if (range) {
@@ -203,7 +204,7 @@ async function perform(tx: Transaction, m: Member, action: string, b: Input, pas
             childCode = `${rcode} (ซ้ำ-${row.sheet}:${row.row})`;
           }
           seenCodesInBatch.add(childCode);
-          await insertAsset(tx, {
+          assetsToInsert.push(financialData({
             ...base,
             id: id(),
             code: childCode,
@@ -212,10 +213,17 @@ async function perform(tx: Transaction, m: Member, action: string, b: Input, pas
             salvageSatang: salvage[i],
             lifecycle: 'active',
             parentId: base.id
-          });
+          }) as Prisma.AssetCreateManyInput);
         }
       }
       importedCount++;
+    }
+
+    if (assetsToInsert.length) {
+      await tx.asset.createMany({ data: assetsToInsert, skipDuplicates: true });
+    }
+    if (sourceRowsToInsert.length) {
+      await tx.sourceRow.createMany({ data: sourceRowsToInsert, skipDuplicates: true });
     }
 
     await audit(tx, m, 'นำเข้าครุภัณฑ์แบบกลุ่ม', null, null, { sourceId, count: importedCount, requested: keys.length }, `นำเข้าพร้อมกัน ${importedCount} รายการ`);
