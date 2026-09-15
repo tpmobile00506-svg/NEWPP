@@ -330,6 +330,61 @@ button:focus-visible, a:focus-visible {
   margin-bottom: 2px;
 }
 
+/* Sidebar Minimal Dark Scrollbar (Modern & Minimal) */
+[data-slot="sidebar-content"],
+[data-sidebar="content"],
+[data-slot="sidebar"],
+[data-slot="sidebar-inner"],
+[data-slot="sidebar-container"] {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.22) transparent;
+}
+
+[data-slot="sidebar-content"]::-webkit-scrollbar,
+[data-sidebar="content"]::-webkit-scrollbar,
+[data-slot="sidebar"]::-webkit-scrollbar,
+[data-slot="sidebar-inner"]::-webkit-scrollbar,
+[data-slot="sidebar-container"]::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+[data-slot="sidebar-content"]::-webkit-scrollbar-track,
+[data-sidebar="content"]::-webkit-scrollbar-track,
+[data-slot="sidebar"]::-webkit-scrollbar-track,
+[data-slot="sidebar-inner"]::-webkit-scrollbar-track,
+[data-slot="sidebar-container"]::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+[data-slot="sidebar-content"]::-webkit-scrollbar-thumb,
+[data-sidebar="content"]::-webkit-scrollbar-thumb,
+[data-slot="sidebar"]::-webkit-scrollbar-thumb,
+[data-slot="sidebar-inner"]::-webkit-scrollbar-thumb,
+[data-slot="sidebar-container"]::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 9999px;
+  transition: background 0.2s ease;
+}
+
+[data-slot="sidebar-content"]::-webkit-scrollbar-thumb:hover,
+[data-sidebar="content"]::-webkit-scrollbar-thumb:hover,
+[data-slot="sidebar"]::-webkit-scrollbar-thumb:hover,
+[data-slot="sidebar-inner"]::-webkit-scrollbar-thumb:hover,
+[data-slot="sidebar-container"]::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.38);
+}
+
+[data-slot="sidebar-content"]::-webkit-scrollbar-button,
+[data-sidebar="content"]::-webkit-scrollbar-button,
+[data-slot="sidebar"]::-webkit-scrollbar-button,
+[data-slot="sidebar-inner"]::-webkit-scrollbar-button,
+[data-slot="sidebar-container"]::-webkit-scrollbar-button {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
 /* Metric KPI Cards */
 .metric-grid {
   display: grid;
