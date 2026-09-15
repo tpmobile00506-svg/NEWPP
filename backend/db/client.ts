@@ -2,90 +2,49 @@ import pg from 'pg';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient, Prisma } from '../generated/prisma/client';
 import { settings } from '../config/env';
+import { ApiError } from '../services/errors';
+const cached = globalThis as unknown as { assetPrisma?: PrismaClient; assetPool?: pg.Pool };
+export function getDatabaseUrl() { return settings.databaseUrl; }
+export function getPool(): pg.Pool {
+  if (cached.assetPool) return cached.assetPool;
+  if (!settings.databaseUrl) throw new ApiError('ฐานข้อมูลยังไม่ได้ตั้งค่า กรุณาติดต่อผู้ดูแลระบบ', 503);
+  let connection: URL;
+  try { connection = new URL(settings.databaseUrl); } catch { throw new ApiError('การตั้งค่าฐานข้อมูลไม่ถูกต้อง', 503); }
+  if (!['postgres:', 'postgresql:'].includes(connection.protocol)) throw new ApiError('การตั้งค่าฐานข้อมูลไม่ถูกต้อง', 503);
+  const local = ['localhost', '127.0.0.1', '[::1]'].includes(connection.hostname);
+  if (!local) { connection.searchParams.set('sslmode', 'verify-full'); connection.searchParams.delete('uselibpqcompat'); }
+  cached.assetPool = new pg.Pool({ connectionString: connection.href, max: 5, connectionTimeoutMillis: 10000, idleTimeoutMillis: 20000 });
+  cached.assetPrisma = new PrismaClient({ adapter: new PrismaPg(cached.assetPool) });
+  return cached.assetPool;
+}
+export const prisma = new Proxy({} as PrismaClient, {
+  get(_target, property) {
+    getPool();
+    const value = (cached.assetPrisma as any)[property];
+    return typeof value === 'function' ? value.bind(cached.assetPrisma) : value;
+  },
+});
 import { ensureDatabaseReady } from './init';
 
-import { ApiError } from '../services/errors';
-
-export function getDatabaseUrl(): string {
-  let url = (process.env.DATABASE_URL || settings.databaseUrl || '').trim();
-  if ((url.startsWith('"') && url.endsWith('"')) || (url.startsWith("'") && url.endsWith("'"))) {
-    url = url.slice(1, -1).trim();
-  }
-  return url;
-}
-
-const globalForDb = globalThis as unknown as {
-  prisma?: PrismaClient;
-  pgPool?: pg.Pool;
-  currentUrl?: string;
-};
-
-export function getPool(): pg.Pool {
-  const url = getDatabaseUrl();
-  if (globalForDb.pgPool && globalForDb.currentUrl === url) {
-    return globalForDb.pgPool;
-  }
-  const isRemote = url.includes('neon.tech') ||
-                   url.includes('sslmode=require') ||
-                   url.includes('supabase') ||
-                   url.includes('aws') ||
-                   (!url.includes('localhost') && !url.includes('127.0.0.1') && url.length > 0);
-
-  const pool = new pg.Pool({
-    connectionString: url || undefined,
-    ssl: isRemote ? { rejectUnauthorized: false } : undefined,
-    connectionTimeoutMillis: 5000,
-  });
-
-  globalForDb.pgPool = pool;
-  globalForDb.currentUrl = url;
-  globalForDb.prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
-  return pool;
-}
-
-export const pool = getPool();
-
 export async function checkDatabase() {
-  const url = getDatabaseUrl();
-  if (!url) {
-    throw new ApiError('ยังไม่ได้กำหนด DATABASE_URL ใน Environment Variables บน Vercel กรุณานำ Connection String จาก Neon มาใส่', 400);
-  }
-  if ((url.includes('localhost') || url.includes('127.0.0.1')) && process.env.VERCEL) {
-    throw new ApiError('DATABASE_URL บน Vercel เป็น localhost ซึ่งเซิร์ฟเวอร์ Cloud ไม่สามารถต่อได้ กรุณานำ Connection String จาก Neon มาใส่', 400);
-  }
   try {
-    const p = getPool();
-    await ensureDatabaseReady(p);
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error('Database connection error:', msg);
-    throw new ApiError(`ไม่สามารถเชื่อมต่อฐานข้อมูลได้: ${msg}`, 400);
+    const pool = getPool();
+    await pool.query('SELECT 1');
+    await ensureDatabaseReady(pool);
+  }
+  catch (error) {
+    console.error('Database unavailable', { code: (error as { code?: string }).code });
+    throw new ApiError('ไม่สามารถเชื่อมต่อฐานข้อมูลได้ กรุณาลองใหม่ภายหลัง', 503);
   }
 }
-
-function getPrismaClient(): PrismaClient {
-  getPool();
-  return globalForDb.prisma!;
-}
-
-export const prisma = new Proxy({} as PrismaClient, {
-  get(_target, prop) {
-    const client = getPrismaClient();
-    const val = (client as any)[prop];
-    return typeof val === 'function' ? val.bind(client) : val;
-  }
-});
-
 export type Transaction = Prisma.TransactionClient;
 export { Prisma };
-
-// The API contract uses safe integer satang; PostgreSQL stores them in BIGINT.
 export function json(value: unknown): string {
   return JSON.stringify(value, (_key, item) => {
     if (typeof item !== 'bigint') return item;
-    const n = Number(item);
-    if (!Number.isSafeInteger(n)) throw new Error('Database value exceeds the API safe integer range');
-    return n;
+    const number = Number(item);
+    if (!Number.isSafeInteger(number)) throw new Error('Database number is outside the safe integer range');
+    return number;
   });
 }
 export function plain<T>(value: unknown): T { return JSON.parse(json(value)) as T; }

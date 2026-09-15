@@ -397,6 +397,8 @@ type FieldRefInputType<Model, FieldType> = Model extends never ? never : FieldRe
 
 
 export const ModelName = {
+  StoredFile: 'StoredFile',
+  LoginAttempt: 'LoginAttempt',
   User: 'User',
   Session: 'Session',
   Invite: 'Invite',
@@ -429,10 +431,158 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "user" | "session" | "invite" | "setting" | "category" | "branch" | "location" | "assetGroup" | "importFile" | "sourceRow" | "asset" | "operation" | "audit" | "assetRequest" | "approval" | "stocktake" | "stocktakeItem"
+    modelProps: "storedFile" | "loginAttempt" | "user" | "session" | "invite" | "setting" | "category" | "branch" | "location" | "assetGroup" | "importFile" | "sourceRow" | "asset" | "operation" | "audit" | "assetRequest" | "approval" | "stocktake" | "stocktakeItem"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
+    StoredFile: {
+      payload: Prisma.$StoredFilePayload<ExtArgs>
+      fields: Prisma.StoredFileFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.StoredFileFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$StoredFilePayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.StoredFileFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$StoredFilePayload>
+        }
+        findFirst: {
+          args: Prisma.StoredFileFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$StoredFilePayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.StoredFileFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$StoredFilePayload>
+        }
+        findMany: {
+          args: Prisma.StoredFileFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$StoredFilePayload>[]
+        }
+        create: {
+          args: Prisma.StoredFileCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$StoredFilePayload>
+        }
+        createMany: {
+          args: Prisma.StoredFileCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.StoredFileCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$StoredFilePayload>[]
+        }
+        delete: {
+          args: Prisma.StoredFileDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$StoredFilePayload>
+        }
+        update: {
+          args: Prisma.StoredFileUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$StoredFilePayload>
+        }
+        deleteMany: {
+          args: Prisma.StoredFileDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.StoredFileUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.StoredFileUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$StoredFilePayload>[]
+        }
+        upsert: {
+          args: Prisma.StoredFileUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$StoredFilePayload>
+        }
+        aggregate: {
+          args: Prisma.StoredFileAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateStoredFile>
+        }
+        groupBy: {
+          args: Prisma.StoredFileGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.StoredFileGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.StoredFileCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.StoredFileCountAggregateOutputType> | number
+        }
+      }
+    }
+    LoginAttempt: {
+      payload: Prisma.$LoginAttemptPayload<ExtArgs>
+      fields: Prisma.LoginAttemptFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.LoginAttemptFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$LoginAttemptPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.LoginAttemptFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$LoginAttemptPayload>
+        }
+        findFirst: {
+          args: Prisma.LoginAttemptFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$LoginAttemptPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.LoginAttemptFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$LoginAttemptPayload>
+        }
+        findMany: {
+          args: Prisma.LoginAttemptFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$LoginAttemptPayload>[]
+        }
+        create: {
+          args: Prisma.LoginAttemptCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$LoginAttemptPayload>
+        }
+        createMany: {
+          args: Prisma.LoginAttemptCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.LoginAttemptCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$LoginAttemptPayload>[]
+        }
+        delete: {
+          args: Prisma.LoginAttemptDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$LoginAttemptPayload>
+        }
+        update: {
+          args: Prisma.LoginAttemptUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$LoginAttemptPayload>
+        }
+        deleteMany: {
+          args: Prisma.LoginAttemptDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.LoginAttemptUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.LoginAttemptUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$LoginAttemptPayload>[]
+        }
+        upsert: {
+          args: Prisma.LoginAttemptUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$LoginAttemptPayload>
+        }
+        aggregate: {
+          args: Prisma.LoginAttemptAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateLoginAttempt>
+        }
+        groupBy: {
+          args: Prisma.LoginAttemptGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.LoginAttemptGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.LoginAttemptCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.LoginAttemptCountAggregateOutputType> | number
+        }
+      }
+    }
     User: {
       payload: Prisma.$UserPayload<ExtArgs>
       fields: Prisma.UserFieldRefs
@@ -1730,6 +1880,24 @@ export const TransactionIsolationLevel = runtime.makeStrictEnum({
 export type TransactionIsolationLevel = (typeof TransactionIsolationLevel)[keyof typeof TransactionIsolationLevel]
 
 
+export const StoredFileScalarFieldEnum = {
+  key: 'key',
+  body: 'body',
+  createdAt: 'createdAt'
+} as const
+
+export type StoredFileScalarFieldEnum = (typeof StoredFileScalarFieldEnum)[keyof typeof StoredFileScalarFieldEnum]
+
+
+export const LoginAttemptScalarFieldEnum = {
+  key: 'key',
+  attempts: 'attempts',
+  windowStart: 'windowStart'
+} as const
+
+export type LoginAttemptScalarFieldEnum = (typeof LoginAttemptScalarFieldEnum)[keyof typeof LoginAttemptScalarFieldEnum]
+
+
 export const UserScalarFieldEnum = {
   id: 'id',
   email: 'email',
@@ -1987,16 +2155,16 @@ export type ListStringFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaMod
 
 
 /**
- * Reference to a field of type 'Int'
+ * Reference to a field of type 'Bytes'
  */
-export type IntFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Int'>
+export type BytesFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Bytes'>
     
 
 
 /**
- * Reference to a field of type 'Int[]'
+ * Reference to a field of type 'Bytes[]'
  */
-export type ListIntFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Int[]'>
+export type ListBytesFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Bytes[]'>
     
 
 
@@ -2011,6 +2179,20 @@ export type DateTimeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel
  * Reference to a field of type 'DateTime[]'
  */
 export type ListDateTimeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'DateTime[]'>
+    
+
+
+/**
+ * Reference to a field of type 'Int'
+ */
+export type IntFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Int'>
+    
+
+
+/**
+ * Reference to a field of type 'Int[]'
+ */
+export type ListIntFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Int[]'>
     
 
 
@@ -2192,6 +2374,8 @@ export interface PrismaClientOptionsWithAdapter extends PrismaClientBaseOptions 
  */
 export type PrismaClientOptions = PrismaClientOptionsWithAccelerateUrl | PrismaClientOptionsWithAdapter
 export type GlobalOmitConfig = {
+  storedFile?: Prisma.StoredFileOmit
+  loginAttempt?: Prisma.LoginAttemptOmit
   user?: Prisma.UserOmit
   session?: Prisma.SessionOmit
   invite?: Prisma.InviteOmit

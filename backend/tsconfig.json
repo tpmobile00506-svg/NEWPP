@@ -1,0 +1,9 @@
+{
+  "extends": "../frontend/tsconfig.json",
+  "compilerOptions": {
+    "paths": { "@/*": ["../*"], "@/shared/*": ["./contracts/*"], "@/data/*": ["./data/*"] },
+    "tsBuildInfoFile": "./.cache/typecheck.tsbuildinfo"
+  },
+  "include": ["**/*.ts"],
+  "exclude": ["archive", ".cache", "tests", "generated"]
+}

@@ -1,23 +1,43 @@
-import {Asset} from '@/shared/domain';
+import { Pool } from 'pg';
+import ExcelJS from 'exceljs';
+import path from 'path';
+import os from 'os';
 
-export const reportHeaders = [
-  'ลำดับ',
-  'หมายเลขครุภัณฑ์',
-  'รายการ',
-  'จำนวน',
-  'ราคาต่อหน่วย',
-  'จำนวนเงิน',
-  'หมายเหตุ',
-  'สาขา',
-  'หมวด (กลุ่มต่างๆ)',
-  'สำนักงาน'
-];
+const pool = new Pool({ connectionString: 'postgresql://postgres:252025@localhost:5432/ksu_asset_manager' });
 
-export async function exportWorkbook(assets: Asset[]) {
-  assets = assets.filter(a => a.lifecycle !== 'split');
-  const ExcelModule = await import('exceljs');
-  const Excel = (ExcelModule as any).default || ExcelModule;
-  const w = new Excel.Workbook();
+async function generateExport() {
+  const res = await pool.query('SELECT * FROM assets WHERE lifecycle != \'split\' ORDER BY id ASC');
+  const assets = res.rows.map(r => ({
+    id: r.id,
+    code: r.code,
+    name: r.name,
+    quantity: r.quantity,
+    unitSatang: r.unitSatang != null ? Number(r.unitSatang) : 0,
+    totalSatang: r.totalSatang != null ? Number(r.totalSatang) : 0,
+    notes: r.notes,
+    location: r.location,
+    branch: r.branch,
+    groupName: r.groupName,
+    category: r.category,
+    lifecycle: r.lifecycle
+  }));
+
+  console.log(`Fetched ${assets.length} assets from database.`);
+
+  const reportHeaders = [
+    'ลำดับ',
+    'หมายเลขครุภัณฑ์',
+    'รายการ',
+    'จำนวน',
+    'ราคาต่อหน่วย',
+    'จำนวนเงิน',
+    'หมายเหตุ',
+    'สาขา',
+    'หมวด (กลุ่มต่างๆ)',
+    'สำนักงาน'
+  ];
+
+  const w = new ExcelJS.Workbook();
   w.creator = 'คณะวิศวกรรมศาสตร์และเทคโนโลยีอุตสาหกรรม มหาวิทยาลัยกาฬสินธุ์';
 
   const s = w.addWorksheet('รายละเอียดครุภัณฑ์คงเหลือ', {
@@ -47,7 +67,7 @@ export async function exportWorkbook(assets: Asset[]) {
       }
     }
   });
-  delete (s.pageSetup as any).scale;
+  delete s.pageSetup.scale;
 
   s.columns = [
     { width: 6.80 },   // 1: ลำดับ
@@ -62,14 +82,13 @@ export async function exportWorkbook(assets: Asset[]) {
     { width: 17.00 }   // 10: สำนักงาน
   ];
 
-
   const todayThai = new Intl.DateTimeFormat('th-TH', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date());
 
   const ITEMS_PER_PAGE = 48;
   const totalPages = Math.max(1, Math.ceil(assets.length / ITEMS_PER_PAGE));
 
   let currentItemIndex = 0;
-  let lastCarriedForwardRow: number | null = null;
+  let lastCarriedForwardRow = null;
 
   for (let page = 1; page <= totalPages; page++) {
     const pageAssets = assets.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
@@ -123,9 +142,9 @@ export async function exportWorkbook(assets: Asset[]) {
       };
     }
 
-    let pageStartDataRow: number | null = null;
-    let pageEndDataRow: number | null = null;
-    let broughtForwardRowIdx: number | null = null;
+    let pageStartDataRow = null;
+    let pageEndDataRow = null;
+    let broughtForwardRowIdx = null;
 
     if (isFirstPage) {
       // แถว 5: หมวดคณะ (เฉพาะหน้าแรก ผสาน A:C)
@@ -146,7 +165,7 @@ export async function exportWorkbook(assets: Asset[]) {
       r5.getCell(1).alignment = { vertical: 'middle', horizontal: 'left' };
     } else {
       // แถว ยอดยกมา (หน้าที่ 2 เป็นต้นไป)
-      const rBrought: any = s.addRow([
+      const rBrought = s.addRow([
         'คณะวิศวกรรมศาสตร์และเทคโนโลยีอุตสาหกรรม',
         '',
         '',
@@ -237,12 +256,12 @@ export async function exportWorkbook(assets: Asset[]) {
 
     if (!isLastPage && pageStartDataRow && pageEndDataRow) {
       // แถว ยอดยกไป (ท้ายหน้านี้)
-      const carriedFormula: string = isFirstPage
+      const carriedFormula = isFirstPage
         ? `SUM(F${pageStartDataRow}:F${pageEndDataRow})`
         : `SUM(F${broughtForwardRowIdx}, F${pageStartDataRow}:F${pageEndDataRow})`;
 
-      const rCarried: any = s.addRow(['', '', '', '', 'ยอดยกไป', { formula: carriedFormula }, '', '', '', '']);
-      const rCarriedIdx: number = rCarried.number;
+      const rCarried = s.addRow(['', '', '', '', 'ยอดยกไป', { formula: carriedFormula }, '', '', '', '']);
+      const rCarriedIdx = rCarried.number;
       lastCarriedForwardRow = rCarriedIdx;
       rCarried.height = 23.1;
 
@@ -304,56 +323,24 @@ export async function exportWorkbook(assets: Asset[]) {
     }
   }
 
-  const bytes = await w.xlsx.writeBuffer();
-  save(new Blob([bytes as BlobPart], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), 'รายละเอียดครุภัณฑ์คงเหลือ-10-คอลัมน์.xlsx');
+  const fileName = 'รายละเอียดครุภัณฑ์คงเหลือ-10-คอลัมน์.xlsx';
+  const localDest = path.join(process.cwd(), '..', fileName);
+  const downloadDest = path.join(os.homedir(), 'Downloads', fileName);
+
+  await w.xlsx.writeFile(localDest);
+  console.log('Saved to workspace root:', localDest);
+
+  try {
+    await w.xlsx.writeFile(downloadDest);
+    console.log('Saved to user Downloads folder:', downloadDest);
+  } catch (err) {
+    console.warn('Could not write to Downloads:', err.message);
+  }
+
+  pool.end();
 }
 
-function save(blob: Blob, name: string) {
-  const url = URL.createObjectURL(blob), a = document.createElement('a');
-  a.href = url;
-  a.download = name;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-
-export function printAssets(assets: Asset[]) {
-  const old = document.getElementById('asset-print');
-  old?.remove();
-  const div = document.createElement('div');
-  div.id = 'asset-print';
-  div.className = 'print-only';
-  const h = document.createElement('h2');
-  h.className = 'print-title';
-  h.textContent = 'มหาวิทยาลัยกาฬสินธุ์ · รายละเอียดครุภัณฑ์คงเหลือ';
-  div.appendChild(h);
-  const sub = document.createElement('p');
-  sub.style.margin = '0 0 12px 0';
-  sub.style.fontFamily = "'TH Sarabun New', sans-serif";
-  sub.style.fontSize = '15px';
-  sub.style.color = '#475569';
-  sub.textContent = 'คณะวิศวกรรมศาสตร์และเทคโนโลยีอุตสาหกรรม · ณ วันที่ 30 กันยายน 2568';
-  div.appendChild(sub);
-
-  const t = document.createElement('table');
-  t.className = 'print-table';
-  const head = t.createTHead().insertRow();
-  reportHeaders.forEach(x => {
-    const c = document.createElement('th');
-    c.textContent = x;
-    head.appendChild(c);
-  });
-  const body = t.createTBody();
-  assets.forEach((a, i) => {
-    const r = body.insertRow();
-    const notesCombined = a.notes && a.location && a.notes !== a.location ? `${a.notes} • ${a.location}` : (a.notes || a.location || '—');
-    const vals = [i + 1, a.code, a.name, a.quantity, (a.unitSatang / 100).toLocaleString('th-TH', { minimumFractionDigits: 2 }), (a.totalSatang / 100).toLocaleString('th-TH', { minimumFractionDigits: 2 }), notesCombined, a.branch, a.groupName || '—', a.category];
-    vals.forEach(v => {
-      r.insertCell().textContent = String(v ?? '');
-    });
-  });
-  div.appendChild(t);
-  document.body.appendChild(div);
-  window.print();
-  div.remove();
-}
-
+generateExport().catch(e => {
+  console.error(e);
+  pool.end();
+});

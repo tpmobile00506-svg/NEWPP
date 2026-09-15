@@ -1,26 +1,55 @@
-# Backend — API ฐานข้อมูล และกฎธุรกิจ
+# Backend — Node.js, PostgreSQL และ Prisma
 
-- `routes/data.ts`: GET/POST /api/data และรูปแบบข้อผิดพลาด
-- `routes/source.ts`: ดาวน์โหลดไฟล์ต้นฉบับหลังตรวจสิทธิ์
-- `services/asset-service.ts`: ตรวจบทบาท บันทึกธุรกรรม นำเข้า อนุมัติ ตรวจนับ และประวัติ
-- `auth/chatgpt.ts`: ยืนยันตัวตนจาก Sites/ChatGPT
-- `db/schema.ts`: schema 16 ตาราง
-- `db/migrations/`: SQL และประวัติ migration ห้ามแก้ migration ที่ใช้งานแล้ว
-- `db/drizzle.config.ts`: ตั้งค่า Drizzle; คำสั่งรันจาก root ของโครงการ
-- `imports/workbook.ts`: อ่าน Excel และเก็บค่าต้นฉบับเพื่อเสนอรายการให้ตรวจทาน
-- `data/`: Excel ที่ให้มาในรูปข้อมูลภายใน server รวมสำเนา byte เดิม
-- `tests/critical-workflows.mjs`: ทดสอบ 5 บทบาท Split Lot การอนุมัติ และการนำเข้า
-- `types/`: declarations สำหรับ Cloudflare และตัวอ่าน Excel
+Backend รันบน Node.js ผ่าน route adapters ของ Next.js ใน `frontend/app/api/` ใช้ PostgreSQL เป็นฐานข้อมูล และ Prisma เป็น ORM
 
-เงินเก็บ integer satang; parent ของ split มี lifecycle=split และไม่รวมยอดทะเบียน
-D1 batch + assertion guard ใช้ป้องกันข้อมูลเปลี่ยนพร้อมกัน การเขียนหลาย statement สำเร็จหรือ rollback ทั้งหมด
+| ตำแหน่ง | หน้าที่ |
+| --- | --- |
+| `auth/sessions.ts` | ตรวจรหัสผ่าน hash จัดการ session cookie และตรวจผู้ใช้ |
+| `config/` | Environment และการตั้งค่า server |
+| `contracts/domain.ts` | ชนิดข้อมูลและกฎคำนวณร่วมกับ frontend |
+| `db/client.ts` | PostgreSQL pool, Prisma Client และ BigInt/JSON |
+| `prisma/schema.prisma` | โครงสร้างข้อมูลของระบบ |
+| `prisma/migrations/` | ประวัติการเปลี่ยน schema |
+| `prisma/seed.ts` | เตรียมบัญชี Admin จาก environment |
+| `routes/` | API ฝั่ง server |
+| `services/asset-service.ts` | อ่านทะเบียน ตรวจข้อมูล นำเข้า และประวัติ |
+| `services/asset-mutations.ts` | บันทึก แบ่งล็อต คำขอ อนุมัติ ตรวจนับ และผู้ใช้ |
+| `imports/workbook.ts` | อ่าน XLSX และเก็บค่าต้นฉบับไว้ตรวจทาน |
+| `storage/files.ts` | เก็บ/อ่านไฟล์ผ่าน PostgreSQL `StoredFile` |
+| `data/` | ต้นฉบับส่วนตัวในเครื่อง ไม่รวมใน Git สาธารณะ |
+| `scripts/` | คำสั่งดูแลระบบและ seed ต้นฉบับ |
+| `tests/` | ทดสอบกฎธุรกิจและ API |
+| `docs/` | รายงานตรวจการเปลี่ยนแปลง |
+| `archive/` | โค้ด D1/Sites และ build script เก่า ไม่ใช้รันปัจจุบัน |
+| `generated/`, `.cache/` | ไฟล์ที่เครื่องมือสร้าง ไม่แก้ด้วยมือ |
 
-API หลัก GET /api/data?view=state|source|history|stocktake
-POST JSON /api/data action: create, import, edit, split, request, approve, reject, repairComplete, round, check, closeRound, user, workflow
-POST multipart /api/data field file: อ่าน .xlsx บน server และเก็บไฟล์ใน R2
-GET /api/source?source=...: ดาวน์โหลดไฟล์เดิม
+เงินเก็บเป็น `BigInt` หน่วยสตางค์ PostgreSQL transaction บันทึกการเปลี่ยนแปลงที่ต้องสำเร็จพร้อมกัน การแบ่งล็อตเก็บ parent เป็น `lifecycle=split` และนับยอดจากรายการลูกที่ใช้งานอยู่ การตอบ API ต้องแปลง BigInt และตรวจช่วงจำนวนเต็มที่ JavaScript รองรับ
 
-ข้อจำกัดปัจจุบัน: ใช้ D1/Drizzle ไม่ใช่ PostgreSQL/Prisma; รันรวม origin เดียวกับ frontend ผ่านตัวเชื่อม `frontend/app/api/`
+## API หลัก
 
-รัน `npm run db:generate` จาก root เพื่อสร้าง migration ใหม่ และ `npm test` หลังเปิดเซิร์ฟเวอร์ทดสอบตาม README หลัก
-ขั้นตอน build คัดลอก migrations ไป `dist/.openai/drizzle/` ให้ Sites ติดตั้งฐานข้อมูลได้ตามเดิม
+| Method / URL | หน้าที่ |
+| --- | --- |
+| `POST /api/auth/login` | เข้าสู่ระบบด้วยอีเมลและรหัสผ่าน |
+| `POST /api/auth/logout` | ยกเลิก session |
+| `GET /api/data` | อ่านทะเบียน/ต้นฉบับ/ประวัติ/ตรวจนับตามพารามิเตอร์ view และสิทธิ์ |
+| `POST /api/data` แบบ JSON | action ของทะเบียน คำขอ อนุมัติ ตรวจนับ ผู้ใช้ และการตั้งค่า |
+| `POST /api/data` แบบ multipart ฟิลด์ file | อ่าน XLSX และเก็บต้นฉบับ |
+| `GET /api/source?source=...` | ดาวน์โหลดต้นฉบับหลังตรวจสิทธิ์ |
+| `GET /api/health` | ตรวจความพร้อมโดยไม่เปิดเผย credentials |
+
+## คำสั่ง
+
+รันจาก root หลังตั้งค่า environment ตาม [README หลัก](../README.md):
+
+```bash
+npm run db:generate
+npm run db:deploy
+npm run db:seed
+npm run source:seed
+```
+
+`db:generate` สร้าง Prisma Client ส่วน `db:deploy` ติดตั้ง migrations โดยไม่ใช้ `db push --accept-data-loss` การ seed บัญชีและต้นฉบับแยกจาก build เพื่อควบคุมฐานข้อมูลเป้าหมายได้ ตรวจ schema และทำ baseline ก่อนเชื่อมกับฐานข้อมูลจากระบบก่อนหน้า
+
+ต้นฉบับจาก `backend/data/` เข้าสู่ PostgreSQL เมื่อเรียก `source:seed` การอัปโหลดใหม่เก็บใน `StoredFile` จึงไม่พึ่งดิสก์ชั่วคราวของ serverless functions ควรสำรอง PostgreSQL รวมทั้งไฟล์ในตารางนี้ด้วย
+
+ผลทดสอบระบบ D1 เดิมไม่ใช่ผลทดสอบ session/PostgreSQL ปัจจุบัน อ่าน [รายงานตรวจการเปลี่ยนแปลง](docs/CHANGE_AUDIT.md) สำหรับขอบเขตและสถานะการตรวจ ห้ามรันชุดทดสอบที่เขียนข้อมูลกับฐานข้อมูลทะเบียนจริง

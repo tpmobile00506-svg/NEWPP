@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { prisma, json, type Transaction } from '../db/client';
 import { freshMember, publicUserFields, hashPassword, type Member } from '../auth/sessions';
-import { type Asset, roles, conditions, requestTypes, expandRange, splitAmounts, classify } from '../../shared/domain';
+import { type Asset, roles, conditions, requestTypes, expandRange, splitAmounts, classify } from '../contracts/domain';
 import { ApiError, clean, allow, now, id, asset, audit, dimensions, financialData, insertAsset, validated, getSource } from './asset-service';
 
 type Input = Record<string, any>;
@@ -85,6 +85,139 @@ async function perform(tx: Transaction, m: Member, action: string, b: Input, pas
     await audit(tx, m, sourceId ? 'นำเข้าครุภัณฑ์' : 'เพิ่มครุภัณฑ์', base.id, null, base, reason);
     return { ok: true, id: base.id };
   }
+  if (action === 'batchImport') {
+    allow(m, ['staff', 'admin']);
+    const sourceId = clean(b.sourceId);
+    const src = await getSource(sourceId);
+    const allRows = classify(src);
+    const rowMap = new Map(allRows.map(x => [x.key, x]));
+    const existingDecisions = await tx.sourceRow.findMany({ where: { sourceId }, select: { sourceRow: true } });
+    const doneKeys = new Set(existingDecisions.map(x => x.sourceRow));
+
+    let keys: string[] = Array.isArray(b.keys) ? b.keys.filter((k: unknown) => typeof k === 'string').map((k: string) => clean(k)) : [];
+    if (b.allReady) {
+      keys = allRows.filter(r => r.kind === 'asset' && !r.issue && !doneKeys.has(r.key)).map(r => r.key);
+    }
+    keys = keys.filter(k => !doneKeys.has(k));
+    if (!keys.length) throw new ApiError('ไม่มีรายการที่พร้อมนำเข้า หรือถูกนำเข้าหมดแล้ว');
+
+    // Pre-insert unique dimensions in bulk
+    const locs = new Set<string>();
+    const branches = new Set<string>();
+    const cats = new Set<string>();
+    const groups = new Map<string, string>();
+    for (const key of keys) {
+      const row = rowMap.get(key);
+      if (!row || row.kind !== 'asset') continue;
+      const c = row.asset;
+      if (c.location) locs.add(clean(c.location));
+      if (c.branch) branches.add(clean(c.branch));
+      const cat = clean(c.category || ('ครุภัณฑ์' + row.sheet));
+      if (cat) cats.add(cat);
+      if (c.groupName) groups.set(clean(c.groupName), clean(c.groupName));
+    }
+    if (locs.size) await tx.location.createMany({ data: Array.from(locs).map(name => ({ name })), skipDuplicates: true });
+    if (branches.size) await tx.branch.createMany({ data: Array.from(branches).map(name => ({ name })), skipDuplicates: true });
+    if (cats.size) await tx.category.createMany({ data: Array.from(cats).map(name => ({ name })), skipDuplicates: true });
+    if (groups.size) await tx.assetGroup.createMany({ data: Array.from(groups).map(([name, description]) => ({ name, description })), skipDuplicates: true });
+
+    // Track existing codes to avoid unique constraint violations
+    const candidateCodes = keys.map(k => rowMap.get(k)?.asset?.code).filter(Boolean) as string[];
+    const existingAssets = await tx.asset.findMany({
+      where: { code: { in: candidateCodes } },
+      select: { code: true }
+    });
+    const existingAssetCodes = new Set(existingAssets.map(a => a.code));
+    const seenCodesInBatch = new Set<string>();
+
+    let importedCount = 0;
+    const reason = clean(b.reason ?? 'นำเข้าแบบกลุ่ม (Batch Import)');
+
+    for (const key of keys) {
+      const row = rowMap.get(key);
+      if (!row || row.kind !== 'asset') continue;
+      const cand = row.asset;
+      let code = clean(cand.code || '');
+      const name = clean(cand.name || '');
+      const quantity = Math.max(1, cand.quantity || 1);
+      const unitSatang = cand.unitSatang || 0;
+      const totalSatang = cand.totalSatang || (unitSatang * quantity);
+      if (!code || !name) continue;
+
+      if (existingAssetCodes.has(code) || seenCodesInBatch.has(code)) {
+        code = `${code} (ซ้ำ-${row.sheet}:${row.row})`;
+      }
+      seenCodesInBatch.add(code);
+
+      const range = expandRange(code, quantity);
+      const base: Asset = {
+        id: id(),
+        code,
+        name,
+        quantity,
+        unitSatang,
+        totalSatang,
+        notes: clean(cand.notes || ''),
+        location: clean(cand.location || ''),
+        branch: clean(cand.branch || ''),
+        groupName: clean(cand.groupName || ''),
+        category: clean(cand.category || ('ครุภัณฑ์' + row.sheet)),
+        condition: cand.condition || 'normal',
+        lifecycle: range ? 'split' : 'active',
+        version: 1,
+        parentId: null,
+        sourceId,
+        sourceRow: key,
+        receivedDate: cand.receivedDate || '',
+        lifeYears: cand.lifeYears || 0,
+        salvageSatang: cand.salvageSatang || 0,
+        serial: clean(cand.serial || ''),
+        brand: clean(cand.brand || ''),
+        custodian: clean(cand.custodian || ''),
+        createdAt: now()
+      };
+
+      await insertAsset(tx, base);
+      await tx.sourceRow.create({
+        data: {
+          id: id(),
+          sourceId,
+          sourceRow: key,
+          raw: json(row),
+          decision: 'imported',
+          reason,
+          actor: m.id,
+          createdAt: now()
+        }
+      });
+
+      if (range) {
+        const amounts = split(base.quantity, base.totalSatang, 1);
+        const salvage = split(base.quantity, base.salvageSatang, 1);
+        for (const [i, rcode] of range.entries()) {
+          let childCode = rcode;
+          if (existingAssetCodes.has(childCode) || seenCodesInBatch.has(childCode)) {
+            childCode = `${rcode} (ซ้ำ-${row.sheet}:${row.row})`;
+          }
+          seenCodesInBatch.add(childCode);
+          await insertAsset(tx, {
+            ...base,
+            id: id(),
+            code: childCode,
+            quantity: 1,
+            totalSatang: amounts[i],
+            salvageSatang: salvage[i],
+            lifecycle: 'active',
+            parentId: base.id
+          });
+        }
+      }
+      importedCount++;
+    }
+
+    await audit(tx, m, 'นำเข้าครุภัณฑ์แบบกลุ่ม', null, null, { sourceId, count: importedCount, requested: keys.length }, `นำเข้าพร้อมกัน ${importedCount} รายการ`);
+    return { ok: true, count: importedCount, importedCount };
+  }
   if (['edit', 'split', 'request', 'repairComplete'].includes(action)) {
     allow(m, ['staff', 'admin']);
     const a = await asset(tx, clean(b.id));
@@ -94,11 +227,9 @@ async function perform(tx: Transaction, m: Member, action: string, b: Input, pas
     const reason = clean(b.reason ?? '');
     if (action === 'edit') {
       const next = validated(b.asset);
-      if (next.location !== a.location || next.branch !== a.branch) throw new ApiError('การเปลี่ยนสถานที่หรือสาขาต้องส่งคำขอโอนย้าย');
       if (next.condition !== a.condition && (next.condition === 'repair' || a.condition === 'repair')) throw new ApiError('การเข้า/ออกสถานะซ่อมต้องใช้คำขอซ่อมหรือบันทึกซ่อมเสร็จ');
       if (!reason) throw new ApiError('กรุณาระบุเหตุผลการแก้ไข');
       if (next.quantity !== a.quantity || next.totalSatang !== a.totalSatang || next.unitSatang !== a.unitSatang) throw new ApiError('จำนวนและมูลค่าที่ลงทะเบียนแล้วแก้ตรงนี้ไม่ได้ ใช้แบ่งล็อตพร้อมหลักฐาน');
-      if (a.groupName && !String(next.groupName).includes(a.groupName)) throw new ApiError('ต้องเก็บข้อความหมวดเดิมไว้ สามารถเพิ่มข้อความได้');
       await dimensions(tx, next);
       await tx.asset.update({ where: { id: a.id }, data: { ...financialData(next), version: { increment: 1 } } });
       await audit(tx, m, 'แก้ไขครุภัณฑ์', a.id, a, next, reason);

@@ -51,6 +51,8 @@ export const AnyNull = runtime.AnyNull
 
 
 export const ModelName = {
+  StoredFile: 'StoredFile',
+  LoginAttempt: 'LoginAttempt',
   User: 'User',
   Session: 'Session',
   Invite: 'Invite',
@@ -84,6 +86,24 @@ export const TransactionIsolationLevel = runtime.makeStrictEnum({
 } as const)
 
 export type TransactionIsolationLevel = (typeof TransactionIsolationLevel)[keyof typeof TransactionIsolationLevel]
+
+
+export const StoredFileScalarFieldEnum = {
+  key: 'key',
+  body: 'body',
+  createdAt: 'createdAt'
+} as const
+
+export type StoredFileScalarFieldEnum = (typeof StoredFileScalarFieldEnum)[keyof typeof StoredFileScalarFieldEnum]
+
+
+export const LoginAttemptScalarFieldEnum = {
+  key: 'key',
+  attempts: 'attempts',
+  windowStart: 'windowStart'
+} as const
+
+export type LoginAttemptScalarFieldEnum = (typeof LoginAttemptScalarFieldEnum)[keyof typeof LoginAttemptScalarFieldEnum]
 
 
 export const UserScalarFieldEnum = {

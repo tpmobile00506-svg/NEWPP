@@ -3,9 +3,8 @@ import { prisma, plain, json, type Transaction, type Prisma } from '../db/client
 import { publicUserFields, type Member } from '../auth/sessions';
 import { ApiError } from './errors';
 import { parseWorkbook } from '../imports/workbook';
-import { readFileBytes, putFile, removeUncommittedFile } from '../storage/files';
-import { type Asset, type Source, classify, conditions } from '../../shared/domain';
-import supplied from '../data/provided.json';
+import { readFileBytes, putFile } from '../storage/files';
+import { type Asset, type Source, classify, conditions } from '../contracts/domain';
 
 export { ApiError };
 export const now = () => new Date().toISOString();
@@ -34,10 +33,10 @@ export function validated(input: Record<string, unknown>): Partial<Asset> {
   return a;
 }
 export async function dimensions(tx: Transaction, a: Partial<Asset>) {
-  await tx.location.createMany({ data: [{ name: a.location! }], skipDuplicates: true });
-  await tx.branch.createMany({ data: [{ name: a.branch! }], skipDuplicates: true });
-  await tx.category.createMany({ data: [{ name: a.category! }], skipDuplicates: true });
-  await tx.assetGroup.createMany({ data: [{ name: a.groupName!, description: a.groupName! }], skipDuplicates: true });
+  if (a.location) await tx.location.createMany({ data: [{ name: a.location }], skipDuplicates: true });
+  if (a.branch) await tx.branch.createMany({ data: [{ name: a.branch }], skipDuplicates: true });
+  if (a.category) await tx.category.createMany({ data: [{ name: a.category }], skipDuplicates: true });
+  if (a.groupName) await tx.assetGroup.createMany({ data: [{ name: a.groupName, description: a.groupName }], skipDuplicates: true });
 }
 export function financialData(a: Partial<Asset>) {
   return { ...a, unitSatang: BigInt(a.unitSatang ?? 0), totalSatang: BigInt(a.totalSatang ?? 0), salvageSatang: BigInt(a.salvageSatang ?? 0) };
@@ -54,7 +53,6 @@ export async function asset(tx: Transaction, assetId: string): Promise<Asset> {
   return plain<Asset>(a);
 }
 export async function getSource(sourceId: string): Promise<Source> {
-  if (sourceId === 'provided-2569') return supplied as Source;
   const file = await prisma.importFile.findUnique({ where: { id: sourceId } });
   if (!file) throw new ApiError('ไม่พบไฟล์', 404);
   return JSON.parse((await readFileBytes(file.objectKey + '.json')).toString('utf8')) as Source;
@@ -66,16 +64,37 @@ export async function getData(m: Member, url: URL) {
     let rows = classify(s);
     const decisions = await prisma.sourceRow.findMany({ where: { sourceId: s.id }, select: { sourceRow: true } });
     const done = new Set(decisions.map(x => x.sourceRow));
-    const stats = { rows: rows.length, assets: rows.filter(x => x.kind === 'asset').length, review: rows.filter(x => x.kind === 'asset' && x.issue).length, annotations: rows.filter(x => x.kind !== 'asset').length, imported: done.size };
-    const sheet = url.searchParams.get('sheet'), search = url.searchParams.get('q')?.toLowerCase(), kind = url.searchParams.get('kind');
+    const assetRows = rows.filter(x => x.kind === 'asset');
+    const stats = {
+      rows: rows.length,
+      assets: assetRows.length,
+      review: assetRows.filter(x => !!x.issue && !done.has(x.key)).length,
+      ready: assetRows.filter(x => !x.issue && !done.has(x.key)).length,
+      rangeIssues: assetRows.filter(x => x.issueType === 'range' && !done.has(x.key)).length,
+      nameIssues: assetRows.filter(x => x.issueType === 'name' && !done.has(x.key)).length,
+      priceIssues: assetRows.filter(x => x.issueType === 'price' && !done.has(x.key)).length,
+      dupIssues: assetRows.filter(x => x.issueType === 'duplicate' && !done.has(x.key)).length,
+      annotations: rows.filter(x => x.kind !== 'asset').length,
+      imported: done.size
+    };
+    const sheet = url.searchParams.get('sheet');
+    const branch = url.searchParams.get('branch');
+    const search = url.searchParams.get('q')?.toLowerCase();
+    const kind = url.searchParams.get('kind');
     if (sheet && sheet !== 'all') rows = rows.filter(x => x.sheet === sheet);
+    if (branch && branch !== 'all') rows = rows.filter(x => x.asset?.branch === branch);
     if (search) rows = rows.filter(x => JSON.stringify(x.values).toLowerCase().includes(search));
     if (kind === 'pending') rows = rows.filter(x => x.kind === 'asset' && !done.has(x.key));
-    if (kind === 'review') rows = rows.filter(x => x.kind === 'asset' && !!x.issue && !done.has(x.key));
-    if (kind === 'ready') rows = rows.filter(x => x.kind === 'asset' && !x.issue && !done.has(x.key));
-    if (kind === 'annotations') rows = rows.filter(x => x.kind !== 'asset');
+    else if (kind === 'ready') rows = rows.filter(x => x.kind === 'asset' && !x.issue && !done.has(x.key));
+    else if (kind === 'issue-range') rows = rows.filter(x => x.kind === 'asset' && x.issueType === 'range' && !done.has(x.key));
+    else if (kind === 'issue-name') rows = rows.filter(x => x.kind === 'asset' && x.issueType === 'name' && !done.has(x.key));
+    else if (kind === 'issue-price') rows = rows.filter(x => x.kind === 'asset' && x.issueType === 'price' && !done.has(x.key));
+    else if (kind === 'issue-duplicate') rows = rows.filter(x => x.kind === 'asset' && x.issueType === 'duplicate' && !done.has(x.key));
+    else if (kind === 'review') rows = rows.filter(x => x.kind === 'asset' && !!x.issue && !done.has(x.key));
+    else if (kind === 'annotations') rows = rows.filter(x => x.kind !== 'asset');
     const page = Math.max(0, Math.floor(Number(url.searchParams.get('page')) || 0)), size = 40;
-    return { id: s.id, name: s.name, hash: s.hash, sheets: s.sheets.map(x => x.name), stats, total: rows.length, rows: rows.slice(page * size, (page + 1) * size).map(x => ({ ...x, done: done.has(x.key) })) };
+    const activeSheets = s.sheets.filter(x => x.rows.length > 0).map(x => x.name);
+    return { id: s.id, name: s.name, hash: s.hash, sheets: activeSheets, stats, total: rows.length, rows: rows.slice(page * size, (page + 1) * size).map(x => ({ ...x, done: done.has(x.key) })) };
   }
   if (view === 'history') return {
     events: await prisma.audit.findMany({ where: { assetId: url.searchParams.get('asset') || '' }, orderBy: { createdAt: 'desc' } }),
@@ -99,16 +118,15 @@ export async function getData(m: Member, url: URL) {
   return {
     me: m, assets, requests: requests.map(({ asset, ...r }) => ({ ...r, ...asset })),
     rounds: rounds.map(({ items, ...r }) => ({ ...r, total: items.length, checked: items.filter(i => i.result !== 'pending').length })),
-    users, invites, events, imports: [{ id: supplied.id, name: supplied.name, hash: supplied.hash, rowCount: 4312 }, ...imports],
+    users, invites, events, imports,
     settings: Object.fromEntries(settings.map(s => [s.key, s.value])), approvals: approvals.map(a => ({ ...a, actorName: actorNames.get(a.actor) || '' })),
   };
 }
 export async function upload(m: Member, form: FormData) {
   allow(m, ['staff', 'admin']);
   const file = form.get('file');
-  if (!(file instanceof File) || file.size > 10 * 1024 * 1024 || !file.name.toLowerCase().endsWith('.xlsx')) throw new ApiError('รองรับไฟล์ .xlsx ไม่เกิน 10 MB');
+  if (!(file instanceof File) || file.size > 4 * 1024 * 1024 || !file.name.toLowerCase().endsWith('.xlsx')) throw new ApiError('รองรับไฟล์ .xlsx ไม่เกิน 4 MB');
   const bytes = new Uint8Array(await file.arrayBuffer()), hash = createHash('sha256').update(bytes).digest('hex');
-  if (hash === supplied.hash) return { ok: true, id: supplied.id, duplicate: true };
   const old = await prisma.importFile.findUnique({ where: { hash } });
   if (old) return { ok: true, id: old.id, duplicate: true };
   let s: Source;
@@ -122,18 +140,16 @@ export async function upload(m: Member, form: FormData) {
   }
   const key = 'imports/' + s.id;
   try {
-    await putFile(key, bytes); await putFile(key + '.json', JSON.stringify(s));
     await prisma.$transaction(async tx => {
       const user = await tx.user.findUnique({ where: { id: m.id }, select: publicUserFields });
       if (!user?.active) throw new ApiError('บัญชีนี้ถูกระงับสิทธิ์', 403);
       allow(user as Member, ['staff', 'admin']);
+      await putFile(key, bytes, tx); await putFile(key + '.json', JSON.stringify(s), tx);
       await tx.importFile.create({ data: { id: s.id, name: s.name, hash, objectKey: key, rowCount: count, createdAt: now(), actor: m.id } });
       await audit(tx, m, 'อัปโหลด Excel', null, null, { id: s.id, name: s.name, rows: count });
     }, { isolationLevel: 'Serializable' });
   } catch (error) {
-    // Only discard this upload's uncommitted copies; registered source files are never removed.
-    const registered = await prisma.importFile.findUnique({ where: { id: s.id } });
-    if (!registered) await Promise.all([removeUncommittedFile(key), removeUncommittedFile(key + '.json')]);
+    // File bytes and metadata rolled back together; a concurrent upload may already exist.
     const duplicate = await prisma.importFile.findUnique({ where: { hash } });
     if (duplicate) return { ok: true, id: duplicate.id, duplicate: true };
     throw error;

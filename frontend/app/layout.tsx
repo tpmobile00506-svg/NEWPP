@@ -4,12 +4,8 @@ import "@/frontend/styles/globals.css";
 export const metadata: Metadata = {
   title: "ทะเบียนครุภัณฑ์ · คณะวิศวกรรมศาสตร์และเทคโนโลยีอุตสาหกรรม",
   description: "ทะเบียนครุภัณฑ์ การตรวจนับ การโอนย้าย และการอนุมัติ มหาวิทยาลัยกาฬสินธุ์",
-  other: {
-    "codex-preview": "development",
-  },
   icons: {
     icon: "/favicon.svg",
-    shortcut: "/favicon.svg",
   },
 };
 

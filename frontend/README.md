@@ -1,20 +1,28 @@
-# Frontend — หน้าจอและไฟล์เว็บ
+# Frontend — Next.js และ React
 
-- `app/page.tsx`, `app/layout.tsx`: จุดเริ่มหน้าเว็บและ layout
-- `features/inventory/`: ทะเบียน ตัวกรอง ฟอร์ม รายละเอียด QR และแบ่งล็อต
-- `features/imports/`: หน้าตรวจทาน Excel ก่อนนำเข้า
-- `features/operations/`: คำขอ อนุมัติ ตรวจนับ รายงาน และผู้ใช้
-- `components/common.tsx`: UI ที่ใช้ร่วมกันและ HTTP client
-- `components/ui/`: ชุดส่วนประกอบ shadcn
-- `hooks/`: React hooks และเครื่องมือ WebMCP ทางเลือก
-- `services/excel-export.ts`: สร้างไฟล์ Excel และพิมพ์จากข้อมูลที่ผู้ใช้เข้าถึงได้
-- `styles/globals.css`: รูปแบบหน้าจอ responsive และงานพิมพ์
-- `styles/vendor/`: CSS ภายนอกพร้อมใบอนุญาต
-- `public/`: favicon และไฟล์สาธารณะ ห้ามเก็บ Excel ต้นฉบับหรือข้อมูลลับที่นี่
-- `utils/classnames.ts`: รวมชื่อ CSS classes
-- `config/`: การตั้งค่า Next.js และ PostCSS ที่ Vite โหลดจาก root
+โฟลเดอร์นี้เป็น Next.js project root ใช้ package manager จาก root ของ repository รัน `npm run dev` ที่ root แล้วเปิด `http://localhost:3000`
 
-`app/api/` มีเพียงตัวส่งต่อ route ไป `backend/routes/` ตามโครงสร้าง framework
-การอ่าน Excel นำเข้า การตรวจสิทธิ์ และการเข้าฐานข้อมูลทำใน backend ผ่าน `/api/data` และ `/api/source`
+| ตำแหน่ง | หน้าที่ |
+| --- | --- |
+| `app/page.tsx`, `app/layout.tsx` | จุดเริ่มหน้าเว็บและ layout |
+| `app/login/` | หน้าเข้าสู่ระบบ |
+| `app/api/` | ตัวเชื่อม Next.js ไปยัง API ฝั่ง backend |
+| `features/inventory/` | ทะเบียน ตัวกรอง ฟอร์ม รายละเอียด QR และแบ่งล็อต |
+| `features/imports/` | ตรวจทาน Excel ก่อนนำเข้าทะเบียน |
+| `features/operations/` | คำขอ อนุมัติ ตรวจนับ รายงาน และบัญชีผู้ใช้ |
+| `components/common.tsx` | ส่วนประกอบร่วมและ HTTP client |
+| `components/ui/` | ส่วนประกอบหน้าจอ shadcn |
+| `hooks/` | React hooks และเครื่องมือ WebMCP ทางเลือก |
+| `services/excel-export.ts` | สร้าง Excel และพิมพ์จากข้อมูลที่ผู้ใช้เข้าถึงได้ |
+| `styles/` | CSS สำหรับหน้าจอ งานพิมพ์ และ styles ภายนอกพร้อมใบอนุญาต |
+| `public/` | favicon และไฟล์ที่เปิดผ่านเว็บได้โดยตรง |
+| `utils/` | ตัวช่วย UI |
+| `next.config.ts`, `postcss.config.mjs`, `tsconfig.json` | ตั้งค่า Next.js, Tailwind/PostCSS และ TypeScript |
 
-รัน `npm run dev` จาก root ของโครงการ ใช้ package.json และ dependencies ร่วมกับ backend
+Frontend เรียก API บน origin เดียวกัน Route adapters อยู่ใน `app/api/` ตามรูปแบบ Next.js แต่การอ่าน Excel การตรวจสิทธิ์ การคำนวณธุรกรรม และการเชื่อม PostgreSQL อยู่ใน [backend](../backend/README.md)
+
+ชนิดข้อมูลและกฎคำนวณที่ใช้ร่วมกันอยู่ที่ `backend/contracts/domain.ts` ไฟล์นี้ต้องไม่มีการเชื่อมฐานข้อมูลหรือการอ่าน secrets ห้ามนำโมดูล server เช่น `backend/db/client.ts` ไป import ใน client component
+
+ห้ามเก็บ Excel ต้นฉบับ ข้อมูลส่วนบุคคล `.env` หรือรหัสผ่านใน `public/` และห้ามใส่ข้อมูลลับในตัวแปร `NEXT_PUBLIC_*`
+
+อ่านวิธีติดตั้งและเผยแพร่ที่ [README หลัก](../README.md) และ [รายงานตรวจการเปลี่ยนแปลง](../backend/docs/CHANGE_AUDIT.md)

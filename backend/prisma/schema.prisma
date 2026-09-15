@@ -7,6 +7,20 @@ datasource db {
   provider = "postgresql"
 }
 
+model StoredFile {
+  key       String   @id
+  body      Bytes
+  createdAt DateTime @default(now())
+  @@map("stored_files")
+}
+
+model LoginAttempt {
+  key         String   @id
+  attempts    Int
+  windowStart DateTime
+  @@map("login_attempts")
+}
+
 model User {
   id           String @id
   email        String @unique(map: "users_email")
