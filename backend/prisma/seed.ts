@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { randomUUID } from 'node:crypto';
 import { prisma, checkDatabase } from '../db/client';
 import { hashPassword } from '../auth/sessions';
