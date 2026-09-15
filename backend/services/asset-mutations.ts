@@ -102,24 +102,27 @@ async function perform(tx: Transaction, m: Member, action: string, b: Input, pas
     if (!keys.length) throw new ApiError('ไม่มีรายการที่พร้อมนำเข้า หรือถูกนำเข้าหมดแล้ว');
 
     // Pre-insert unique dimensions in bulk
-    const locs = new Set<string>();
-    const branches = new Set<string>();
-    const cats = new Set<string>();
-    const groups = new Map<string, string>();
+    const locs = new Set<string>(['ไม่ระบุสถานที่']);
+    const branches = new Set<string>(['สำนักงานคณบดี']);
+    const cats = new Set<string>(['ครุภัณฑ์ทั่วไป']);
+    const groups = new Map<string, string>([['ทั่วไป', 'ครุภัณฑ์ทั่วไป']]);
     for (const key of keys) {
       const row = rowMap.get(key);
       if (!row || row.kind !== 'asset') continue;
       const c = row.asset;
-      if (c.location) locs.add(clean(c.location));
-      if (c.branch) branches.add(clean(c.branch));
-      const cat = clean(c.category || ('ครุภัณฑ์' + row.sheet));
-      if (cat) cats.add(cat);
-      if (c.groupName) groups.set(clean(c.groupName), clean(c.groupName));
+      const loc = clean(c.location || '') || 'ไม่ระบุสถานที่';
+      const br = clean(c.branch || '') || 'สำนักงานคณบดี';
+      const cat = clean(c.category || ('ครุภัณฑ์' + row.sheet)) || 'ครุภัณฑ์ทั่วไป';
+      const grp = clean(c.groupName || '') || 'ทั่วไป';
+      locs.add(loc);
+      branches.add(br);
+      cats.add(cat);
+      groups.set(grp, grp);
     }
-    if (locs.size) await tx.location.createMany({ data: Array.from(locs).map(name => ({ name })), skipDuplicates: true });
-    if (branches.size) await tx.branch.createMany({ data: Array.from(branches).map(name => ({ name })), skipDuplicates: true });
-    if (cats.size) await tx.category.createMany({ data: Array.from(cats).map(name => ({ name })), skipDuplicates: true });
-    if (groups.size) await tx.assetGroup.createMany({ data: Array.from(groups).map(([name, description]) => ({ name, description })), skipDuplicates: true });
+    await tx.location.createMany({ data: Array.from(locs).map(name => ({ name })), skipDuplicates: true });
+    await tx.branch.createMany({ data: Array.from(branches).map(name => ({ name })), skipDuplicates: true });
+    await tx.category.createMany({ data: Array.from(cats).map(name => ({ name })), skipDuplicates: true });
+    await tx.assetGroup.createMany({ data: Array.from(groups).map(([name, description]) => ({ name, description })), skipDuplicates: true });
 
     // Track existing codes to avoid unique constraint violations
     const candidateCodes = keys.map(k => rowMap.get(k)?.asset?.code).filter(Boolean) as string[];
@@ -158,10 +161,10 @@ async function perform(tx: Transaction, m: Member, action: string, b: Input, pas
         unitSatang,
         totalSatang,
         notes: clean(cand.notes || ''),
-        location: clean(cand.location || ''),
-        branch: clean(cand.branch || ''),
-        groupName: clean(cand.groupName || ''),
-        category: clean(cand.category || ('ครุภัณฑ์' + row.sheet)),
+        location: clean(cand.location || '') || 'ไม่ระบุสถานที่',
+        branch: clean(cand.branch || '') || 'สำนักงานคณบดี',
+        groupName: clean(cand.groupName || '') || 'ทั่วไป',
+        category: clean(cand.category || ('ครุภัณฑ์' + row.sheet)) || 'ครุภัณฑ์ทั่วไป',
         condition: cand.condition || 'normal',
         lifecycle: range ? 'split' : 'active',
         version: 1,

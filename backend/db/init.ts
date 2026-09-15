@@ -171,9 +171,9 @@ CREATE TABLE IF NOT EXISTS "stocktake_items" (
   CONSTRAINT "stocktake_asset_once" UNIQUE ("roundId", "assetId")
 );
 
-INSERT INTO "categories" ("name") VALUES ('ครุภัณฑ์สำนักงาน'), ('ครุภัณฑ์คอมพิวเตอร์'), ('ครุภัณฑ์การศึกษา'), ('ครุภัณฑ์ยานพาหนะ') ON CONFLICT DO NOTHING;
+INSERT INTO "categories" ("name") VALUES ('ครุภัณฑ์สำนักงาน'), ('ครุภัณฑ์คอมพิวเตอร์'), ('ครุภัณฑ์การศึกษา'), ('ครุภัณฑ์ยานพาหนะ'), ('ครุภัณฑ์ทั่วไป') ON CONFLICT DO NOTHING;
 INSERT INTO "branches" ("name") VALUES ('สาขาวิชาวิศวกรรมคอมพิวเตอร์'), ('สาขาวิชาวิศวกรรมอุตสาหการ'), ('สำนักงานคณบดี') ON CONFLICT DO NOTHING;
-INSERT INTO "locations" ("name") VALUES ('อาคาร 1 ชั้น 2'), ('อาคารปฏิบัติการรวม'), ('ห้องพักอาจารย์') ON CONFLICT DO NOTHING;
+INSERT INTO "locations" ("name") VALUES ('อาคาร 1 ชั้น 2'), ('อาคารปฏิบัติการรวม'), ('ห้องพักอาจารย์'), ('ไม่ระบุสถานที่') ON CONFLICT DO NOTHING;
 INSERT INTO "asset_groups" ("name", "description") VALUES ('ทั่วไป', 'ครุภัณฑ์ทั่วไป') ON CONFLICT DO NOTHING;
 `;
 

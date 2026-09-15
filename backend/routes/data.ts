@@ -7,8 +7,10 @@ export function fail(error: unknown) {
   if (error instanceof SyntaxError) return Response.json({ error: 'รูปแบบข้อมูลไม่ถูกต้อง' }, { status: 400 });
   const code = (error as { code?: string })?.code;
   if (['P2002', 'P2004', 'P2034'].includes(code || '')) return Response.json({ error: 'ข้อมูลซ้ำ หรือมีผู้อื่นแก้ไขแล้ว กรุณาโหลดข้อมูลใหม่' }, { status: 409 });
-  console.error('Asset API failed', { code, type: error instanceof Error ? error.name : 'unknown' });
-  return Response.json({ error: 'ระบบไม่พร้อมใช้งาน กรุณาลองใหม่ภายหลัง' }, { status: 503 });
+  if (code === 'P2003') return Response.json({ error: 'ข้อมูลไม่ตรงกับตารางอ้างอิง: ' + ((error as any).meta?.field_name || '') }, { status: 400 });
+  console.error('Asset API failed:', error);
+  const msg = error instanceof Error ? error.message : String(error);
+  return Response.json({ error: msg || 'ระบบไม่พร้อมใช้งาน กรุณาลองใหม่ภายหลัง' }, { status: 500 });
 }
 function response(value: unknown) { return new Response(json(value), { headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' } }); }
 export async function GET(request: Request) {

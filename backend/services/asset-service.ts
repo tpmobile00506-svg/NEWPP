@@ -24,7 +24,11 @@ export function validated(input: Record<string, unknown>): Partial<Asset> {
     if (!Number.isSafeInteger(n) || n < 0 || n > 100000000000000) throw new ApiError('จำนวนและมูลค่าต้องเป็นตัวเลขที่ถูกต้อง');
     a[key] = n;
   }
-  if (!a.code || !a.name || !a.category || !a.branch || !a.location) throw new ApiError('กรุณาระบุรหัส ชื่อ ประเภท สาขา และสถานที่');
+  if (!a.code || !a.name) throw new ApiError('กรุณาระบุรหัสและชื่อครุภัณฑ์');
+  if (!a.category) a.category = 'ครุภัณฑ์ทั่วไป';
+  if (!a.branch) a.branch = 'สำนักงานคณบดี';
+  if (!a.location) a.location = 'ไม่ระบุสถานที่';
+  if (!a.groupName) a.groupName = 'ทั่วไป';
   if (a.quantity < 1 || a.quantity > 1000000) throw new ApiError('จำนวนต้องเป็นจำนวนเต็ม 1–1,000,000');
   if (a.salvageSatang > a.totalSatang || a.lifeYears > 100) throw new ApiError('ตรวจสอบอายุใช้งานและมูลค่าซาก');
   if (a.receivedDate && (!/^\d{4}-\d{2}-\d{2}$/.test(a.receivedDate) || !Number.isFinite(Date.parse(a.receivedDate)) || new Date(a.receivedDate).toISOString().slice(0, 10) !== a.receivedDate)) throw new ApiError('วันที่รับไม่ถูกต้อง');
@@ -33,10 +37,14 @@ export function validated(input: Record<string, unknown>): Partial<Asset> {
   return a;
 }
 export async function dimensions(tx: Transaction, a: Partial<Asset>) {
-  if (a.location) await tx.location.createMany({ data: [{ name: a.location }], skipDuplicates: true });
-  if (a.branch) await tx.branch.createMany({ data: [{ name: a.branch }], skipDuplicates: true });
-  if (a.category) await tx.category.createMany({ data: [{ name: a.category }], skipDuplicates: true });
-  if (a.groupName) await tx.assetGroup.createMany({ data: [{ name: a.groupName, description: a.groupName }], skipDuplicates: true });
+  const loc = a.location || 'ไม่ระบุสถานที่';
+  const branch = a.branch || 'สำนักงานคณบดี';
+  const cat = a.category || 'ครุภัณฑ์ทั่วไป';
+  const group = a.groupName || 'ทั่วไป';
+  await tx.location.createMany({ data: [{ name: loc }], skipDuplicates: true });
+  await tx.branch.createMany({ data: [{ name: branch }], skipDuplicates: true });
+  await tx.category.createMany({ data: [{ name: cat }], skipDuplicates: true });
+  await tx.assetGroup.createMany({ data: [{ name: group, description: group }], skipDuplicates: true });
 }
 export function financialData(a: Partial<Asset>) {
   return { ...a, unitSatang: BigInt(a.unitSatang ?? 0), totalSatang: BigInt(a.totalSatang ?? 0), salvageSatang: BigInt(a.salvageSatang ?? 0) };
