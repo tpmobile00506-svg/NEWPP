@@ -23,4 +23,7 @@ try {
     }, { timeout: 20000 });
     console.log('Original workbook and all source rows stored privately in PostgreSQL; no assets auto-imported.');
   }
-} finally { await prisma.$disconnect(); }
+} finally {
+  await prisma.$disconnect();
+  process.exit(0);
+}
